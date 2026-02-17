@@ -2,7 +2,7 @@
 import React from 'react';
 import { Task, SUBJECT_BG } from '../types';
 import { motion } from 'framer-motion';
-import { Check, ArrowRightLeft, Edit3, Trash2, GripVertical } from 'lucide-react';
+import { Check, ArrowRightLeft, Edit3, Trash2, GripVertical, FlaskConical, Atom, Dna, BookOpenCheck, Languages, Sparkles } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
@@ -14,6 +14,16 @@ interface TaskCardProps {
   isSelectedForSwap: boolean;
   dragControls?: any;
 }
+
+// Map subjects to advanced icons
+const getSubjectIcon = (subject: string) => {
+  if (subject.includes('الكيمياء')) return <FlaskConical size={16} />;
+  if (subject.includes('الفيزياء')) return <Atom size={16} />;
+  if (subject.includes('الأحياء') || subject.includes('الجيولوجيا')) return <Dna size={16} />;
+  if (subject.includes('العربية')) return <BookOpenCheck size={16} />;
+  if (subject.includes('الإنجليزية')) return <Languages size={16} />;
+  return <Sparkles size={16} />;
+};
 
 const TaskCard: React.FC<TaskCardProps> = ({ 
   task, 
@@ -76,11 +86,12 @@ const TaskCard: React.FC<TaskCardProps> = ({
       <div className="flex-1 min-w-0">
         <div 
           style={tagStyle}
-          className={`text-xs font-bold px-2 py-0.5 rounded-md w-fit mb-1 border ${tagClass}`}
+          className={`text-xs font-bold px-2 py-1 rounded-lg w-fit mb-1.5 border flex items-center gap-1.5 ${tagClass}`}
         >
+          {getSubjectIcon(task.subject)}
           {task.subject}
         </div>
-        <h4 className={`text-white font-bold leading-tight ${task.isCompleted ? 'line-through text-gray-500' : ''}`}>
+        <h4 className={`text-white font-bold leading-snug ml-1 ${task.isCompleted ? 'line-through text-gray-500' : ''}`}>
           {task.topic}
         </h4>
       </div>

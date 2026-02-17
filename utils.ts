@@ -15,88 +15,98 @@ export const generatePlan = (totalDays: number, startDateStr: string): Task[] =>
 };
 
 export const distributeTasksSmartly = (tasks: Task[], totalDays: number): Task[] => {
-  // 1. Organize tasks by subject queue
-  const subjects = Array.from(new Set(tasks.map(t => t.subject)));
-  const tasksBySubject: Record<string, Task[]> = {};
+  // 1. Group tasks by Subject into Queues
+  const queues: Record<string, Task[]> = {};
   
-  subjects.forEach(sub => {
-    tasksBySubject[sub] = tasks.filter(t => t.subject === sub);
+  // Ensure we have keys for all subjects to avoid undefined errors
+  const allSubjects = Array.from(new Set(tasks.map(t => t.subject)));
+  allSubjects.forEach(s => queues[s] = []);
+  
+  tasks.forEach(t => {
+    queues[t.subject].push(t);
+  });
+
+  // 2. Define the "Nice Day" Rotation Order
+  // We alternate between: Scientific (Hard) -> Language (Light) -> Scientific (Hard) -> Language (Light) -> Bio/Geo (Medium)
+  // This prevents having Physics + Chemistry + Bio all in one block.
+  const balancedRotation = [
+    'الفيزياء',          // Heavy Scientific
+    'اللغة العربية',     // Language & Literature
+    'الكيمياء',          // Heavy Scientific
+    'اللغة الإنجليزية',  // Language
+    'الأحياء والجيولوجيا' // Memorization/Scientific
+  ];
+
+  // If there are extra subjects not in the hardcoded list (e.g. customized), add them at the end
+  allSubjects.forEach(s => {
+    if (!balancedRotation.includes(s)) balancedRotation.push(s);
   });
 
   const distributedTasks: Task[] = [];
-  const tasksPerDayBase = Math.floor(tasks.length / totalDays);
-  let extraTasks = tasks.length % totalDays;
+  let subjectPointer = 0; // Points to the current subject in balancedRotation
 
-  // Track what was studied yesterday to avoid repetition if possible
-  let previousDaySubjects = new Set<string>();
-
+  // 3. Iterate Day by Day
   for (let day = 0; day < totalDays; day++) {
-    // Determine daily quota
-    let dailyQuota = tasksPerDayBase + (extraTasks > 0 ? 1 : 0);
-    extraTasks--;
+    const remainingDays = totalDays - day;
+    
+    // Calculate total remaining tasks across all queues
+    let totalRemainingTasks = 0;
+    Object.values(queues).forEach(q => totalRemainingTasks += q.length);
 
-    const dayTasks: Task[] = [];
-    const currentDaySubjects = new Set<string>();
+    if (totalRemainingTasks === 0) break;
 
-    let assignedCount = 0;
+    // CORE LOGIC: Divide remaining lessons by remaining days.
+    // Math.ceil ensures we never fall behind. 
+    // Example: 100 tasks / 50 days = 2 tasks/day exactly.
+    // Example: 101 tasks / 50 days = 3 tasks today, then adjusts for tomorrow.
+    const dailyTarget = Math.ceil(totalRemainingTasks / remainingDays);
 
-    // --- Strategy: Variety & Balance ---
-    // We want to pick subjects that:
-    // 1. Have not been picked today yet (Variety within day)
-    // 2. Were NOT picked yesterday (Continuity balance / Spaced repetition)
-    // 3. Have the most tasks remaining (Load balancing)
+    let tasksAddedToday = 0;
+    let attempts = 0; // Safety breaker to prevent infinite loops if queues are empty
 
-    while (assignedCount < dailyQuota) {
-      // Filter subjects that still have tasks
-      const availableSubjects = subjects.filter(s => tasksBySubject[s].length > 0);
+    while (tasksAddedToday < dailyTarget && totalRemainingTasks > 0) {
+       // Pick a subject from the rotation
+       const currentSubject = balancedRotation[subjectPointer];
+       const subjectQueue = queues[currentSubject];
 
-      if (availableSubjects.length === 0) break; // No tasks left at all
+       // Check if this subject has tasks left
+       if (subjectQueue && subjectQueue.length > 0) {
+         const task = subjectQueue.shift(); // Take one task
+         if (task) {
+           task.dayIndex = day;
+           distributedTasks.push(task);
+           tasksAddedToday++;
+           totalRemainingTasks--;
+         }
+         // Move to next subject ONLY after successfully picking one? 
+         // No, always rotate to keep diversity even if one subject runs out, we skip it next loop.
+       } 
 
-      // Score each subject
-      const subjectScores = availableSubjects.map(sub => {
-        let score = 0;
-        
-        // Priority 1: High remaining count (Load balancing)
-        score += tasksBySubject[sub].length * 10;
+       // Move pointer to the next subject in the "Cocktail"
+       subjectPointer = (subjectPointer + 1) % balancedRotation.length;
 
-        // Priority 2: Not used today yet (Diversity within day)
-        if (!currentDaySubjects.has(sub)) score += 1000;
-
-        // Priority 3: Not used yesterday (Diversity across days)
-        if (!previousDaySubjects.has(sub)) score += 500;
-
-        return { sub, score };
-      });
-
-      // Sort by score descending
-      subjectScores.sort((a, b) => b.score - a.score);
-
-      // Pick the winner
-      const winnerSub = subjectScores[0].sub;
-      
-      // Assign task
-      const task = tasksBySubject[winnerSub].shift()!;
-      task.dayIndex = day;
-      dayTasks.push(task);
-      
-      currentDaySubjects.add(winnerSub);
-      assignedCount++;
+       // Safety mechanism: If we looped through all subjects and didn't find tasks (but total > 0), 
+       // it means only specific subjects are left.
+       attempts++;
+       if (attempts > balancedRotation.length * 2 && tasksAddedToday < dailyTarget) {
+           // Fallback: Pick from ANY available queue
+           const anySubject = Object.keys(queues).find(k => queues[k].length > 0);
+           if (anySubject) {
+               const task = queues[anySubject].shift();
+               if (task) {
+                   task.dayIndex = day;
+                   distributedTasks.push(task);
+                   tasksAddedToday++;
+                   totalRemainingTasks--;
+               }
+           } else {
+               break; // No tasks left anywhere
+           }
+       }
     }
-
-    distributedTasks.push(...dayTasks);
-    // Update history for next iteration
-    previousDaySubjects = currentDaySubjects;
   }
 
-  // Edge Case: If any tasks remain (due to weird division), append to end
-  subjects.forEach(sub => {
-    while (tasksBySubject[sub].length > 0) {
-      const task = tasksBySubject[sub].shift()!;
-      task.dayIndex = totalDays - 1;
-      distributedTasks.push(task);
-    }
-  });
-
+  // 4. Sort by Day Index (and ensure tasks inside the day are somewhat ordered by subject rotation if desired, but array order is fine)
   return distributedTasks;
 }
 

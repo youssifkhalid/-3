@@ -2,11 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { Task, DayPlan, SUBJECT_COLORS } from './types';
 import { generatePlan, getDatesForPlan, formatDate, distributeTasksEvenly } from './utils';
+import { fullCurriculum } from './curriculumData'; // Import curriculum to calculate totals
 import Dashboard from './components/Dashboard';
 import PrintLayout from './components/PrintLayout';
 import TaskCard from './components/TaskCard';
 import TaskModal from './components/TaskModal';
-import { Settings, Printer, RotateCcw, Plus, Save, RefreshCw, Trash2, Grip, Send } from 'lucide-react';
+import { Settings, Printer, RotateCcw, Plus, Save, RefreshCw, Trash2, Grip, Send, Calendar, ListTodo, Calculator } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 
 const App: React.FC = () => {
@@ -14,6 +15,10 @@ const App: React.FC = () => {
   const [totalDays, setTotalDays] = useState(60);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSetup, setIsSetup] = useState(false);
+  
+  // Setup Mode State
+  const [planningMode, setPlanningMode] = useState<'days' | 'tasks'>('days');
+  const [tasksPerDay, setTasksPerDay] = useState(4);
   
   // UI States
   const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'all'>('daily');
@@ -49,8 +54,18 @@ const App: React.FC = () => {
   };
 
   const handleCreatePlan = () => {
-    const newTasks = generatePlan(totalDays, startDate);
-    saveState(newTasks, totalDays, startDate);
+    let finalDays = totalDays;
+
+    // If planning by tasks, calculate the required days first
+    if (planningMode === 'tasks') {
+        const totalItems = fullCurriculum.length;
+        finalDays = Math.ceil(totalItems / tasksPerDay);
+        // Add a buffer day if needed or strictly stick to math
+        setTotalDays(finalDays);
+    }
+
+    const newTasks = generatePlan(finalDays, startDate);
+    saveState(newTasks, finalDays, startDate);
     setIsSetup(true);
   };
 
@@ -161,28 +176,112 @@ const App: React.FC = () => {
 
   // Setup Screen
   if (!isSetup) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-950 p-4">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-dark-900 border border-white/10 p-8 rounded-3xl max-w-md w-full shadow-2xl"
-        >
-          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-accent-500 text-center mb-2 font-sans">
-             رفيق الثانوية
-          </h1>
-          <p className="text-gray-400 text-center mb-8 font-semibold">خطط لمستقبلك بذكاء</p>
+    const calculatedDays = Math.ceil(fullCurriculum.length / tasksPerDay);
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-300 mb-2">مدة الخطة (أيام)</label>
-              <input 
-                type="number" 
-                value={totalDays}
-                onChange={(e) => setTotalDays(parseInt(e.target.value))}
-                className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-accent-500 outline-none transition"
-              />
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-dark-950 p-4 relative overflow-hidden">
+        {/* Background Effects */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+             <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-accent-600/20 rounded-full blur-[100px]"></div>
+             <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[100px]"></div>
+        </div>
+
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="bg-dark-900/80 backdrop-blur-xl border border-white/10 p-8 rounded-[2rem] max-w-lg w-full shadow-2xl relative z-10"
+        >
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-accent-600 rounded-2xl flex items-center justify-center shadow-lg shadow-accent-500/20 mx-auto mb-4">
+               <span className="text-3xl font-black text-white">P</span>
             </div>
+            <h1 className="text-3xl font-black text-white font-sans mb-2">رفيق الثانوية</h1>
+            <p className="text-gray-400 font-medium">خطط لمنهجك بالطريقة التي تناسبك</p>
+          </div>
+
+          <div className="space-y-6">
+            
+            {/* Planning Mode Toggle */}
+            <div className="bg-dark-800 p-1.5 rounded-2xl border border-white/5 flex relative">
+                <button 
+                  onClick={() => setPlanningMode('days')}
+                  className={`flex-1 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all relative z-10 ${planningMode === 'days' ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                   <Calendar size={16} />
+                   عدد الأيام
+                </button>
+                <button 
+                  onClick={() => setPlanningMode('tasks')}
+                  className={`flex-1 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all relative z-10 ${planningMode === 'tasks' ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                >
+                   <ListTodo size={16} />
+                   مهام يومية
+                </button>
+                
+                {/* Animated Background for Toggle */}
+                <motion.div 
+                   className="absolute top-1.5 bottom-1.5 bg-accent-600 rounded-xl shadow-lg"
+                   initial={false}
+                   animate={{ 
+                       left: planningMode === 'days' ? '6px' : '50%', 
+                       width: 'calc(50% - 6px)' 
+                   }}
+                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                />
+            </div>
+
+            <AnimatePresence mode="wait">
+                {planningMode === 'days' ? (
+                    <motion.div 
+                        key="days-input"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                    >
+                        <label className="block text-sm font-bold text-gray-300 mb-2">كم يوماً تريد أن تستمر الخطة؟</label>
+                        <div className="relative">
+                            <input 
+                                type="number" 
+                                value={totalDays}
+                                onChange={(e) => setTotalDays(parseInt(e.target.value) || 1)}
+                                min={1}
+                                className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-4 text-white text-lg font-bold focus:ring-2 focus:ring-accent-500 outline-none transition pl-12"
+                            />
+                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2 font-bold">
+                           سيتم توزيع {fullCurriculum.length} درس على {totalDays} يوم (بمعدل {Math.ceil(fullCurriculum.length / totalDays)} دروس يومياً تقريباً)
+                        </p>
+                    </motion.div>
+                ) : (
+                    <motion.div 
+                        key="tasks-input"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                    >
+                        <label className="block text-sm font-bold text-gray-300 mb-2">كم درساً تستطيع أن تذاكر يومياً؟</label>
+                        <div className="relative">
+                            <input 
+                                type="number" 
+                                value={tasksPerDay}
+                                onChange={(e) => setTasksPerDay(parseInt(e.target.value) || 1)}
+                                min={1}
+                                className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-4 text-white text-lg font-bold focus:ring-2 focus:ring-accent-500 outline-none transition pl-12"
+                            />
+                            <ListTodo className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
+                        </div>
+                        <div className="mt-3 bg-accent-500/10 border border-accent-500/20 p-3 rounded-xl flex items-center gap-3">
+                           <Calculator className="text-accent-400" size={20} />
+                           <div>
+                               <p className="text-xs text-accent-200 font-bold">المدة المتوقعة للختم:</p>
+                               <p className="text-lg font-black text-white">{calculatedDays} يوم</p>
+                           </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div>
               <label className="block text-sm font-bold text-gray-300 mb-2">تاريخ البداية</label>
               <input 
@@ -192,11 +291,12 @@ const App: React.FC = () => {
                 className="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-accent-500 outline-none transition"
               />
             </div>
+
             <button 
               onClick={handleCreatePlan}
-              className="w-full bg-accent-600 hover:bg-accent-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-accent-600/20 mt-4 transition-all"
+              className="w-full bg-gradient-to-r from-accent-600 to-blue-600 hover:from-accent-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-accent-600/20 mt-2 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
             >
-              إنشاء الجدول السحري
+              إنشاء الجدول السحري 🚀
             </button>
           </div>
         </motion.div>
